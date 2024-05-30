@@ -1,4 +1,4 @@
-# **Nand2Tetris Project 7: VM Translator**
+# **Nand2Tetris From Project 7 (VM Translator)**
 
 ## Introduction
 

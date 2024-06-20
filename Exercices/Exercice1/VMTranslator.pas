@@ -15,6 +15,8 @@ begin
   CodeWriterInstance.SetFileName(ChangeFileExt(AFileName, '.asm'));
   WriteLn('Entering Translate function with file: ', AFileName);
 
+  CodeWriterInstance.WriteInit;
+
   while Parser.HasMoreCommands do
   begin
     Parser.Advance;
@@ -25,7 +27,19 @@ begin
         CodeWriterInstance.WritePushPop(CmdType, Parser.Arg1, Parser.Arg2);
       C_ARITHMETIC:
         CodeWriterInstance.WriteArithmetic(Parser.Arg1);
-      // Ajoutez ici d'autres cas si nécessaire
+      C_LABEL:
+        CodeWriterInstance.WriteLabel(Parser.Arg1);
+      C_GOTO:
+        CodeWriterInstance.WriteGoto(Parser.Arg1);
+      C_IF:
+        CodeWriterInstance.WriteIf(Parser.Arg1);
+      C_FUNCTION:
+        CodeWriterInstance.WriteFunction(Parser.Arg1, Parser.Arg2);
+      C_CALL:
+        CodeWriterInstance.WriteCall(Parser.Arg1, Parser.Arg2);
+      C_RETURN:
+        CodeWriterInstance.WriteReturn;
+      // Ajoutez d'autres cas comme C_FUNCTION, C_RETURN, C_CALL si nécessaire
     end;
   end;
 
@@ -68,7 +82,7 @@ begin
     CodeWriterInstance := TCodeWriter.Create(ChangeFileExt(InputFileName, '.asm'));
     IterateFiles(InputFileName + PathDelim); // Ensure path ends with a delimiter
   end
-  else
+  else    
   begin
     WriteLn('Entering main block: Single file mode');
     CodeWriterInstance := TCodeWriter.Create(ChangeFileExt(InputFileName, '.asm'));

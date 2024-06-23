@@ -1,63 +1,4 @@
-@256
-D=A
-@SP
-M=D
-@RETURN_LABEL_1
-D=A
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// push pointer 0
-@R3
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// push pointer 1
-@R4
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// push pointer 2
-@R5
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-// push pointer 3
-@R6
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@SP
-D=M
-@5
-D=D-A
-@0
-D=D-A
-@ARG
-M=D
-@SP
-D=M
-@LCL
-M=D
-@Sys.init
-0;JMP
-(RETURN_LABEL_1)
 (SimpleFunction.test)
-// push constant 0
 @0
 D=A
 @SP
@@ -65,7 +6,6 @@ A=M
 M=D
 @SP
 M=M+1
-// push constant 0
 @0
 D=A
 @SP
@@ -167,18 +107,11 @@ A=D-A
 D=M
 @R14
 M=D
-// pop argument 0
-@ARG
-D=M
-@0
-A=D+A
-D=A
-@R13
-M=D
 @SP
-AM=M-1
+M=M-1
+A=M
 D=M
-@R13
+@ARG
 A=M
 M=D
 @ARG

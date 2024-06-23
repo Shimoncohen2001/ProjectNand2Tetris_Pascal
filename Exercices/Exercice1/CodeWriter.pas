@@ -132,7 +132,7 @@ begin
   WriteLn(FOutputFile, 'D;JNE');
 end;
 
-//// sys.init function
+//// sys.init function cette function nous permet d'initilaliser les segments a partir du test fibonaccielement dont le scrypt n'initialise pas cette fois la pile 
 procedure TCodeWriter.WriteInit;
 begin
   // SP=256
@@ -148,21 +148,26 @@ end;
 // procedure to handle return command
 procedure TCodeWriter.WriteReturn;
 begin
-  // Store LCL in R13
+  // Sauvegarder LCL dans R13
   WriteLn(FOutputFile, '@LCL');
   WriteLn(FOutputFile, 'D=M');
   WriteLn(FOutputFile, '@R13');
   WriteLn(FOutputFile, 'M=D');
 
-  // Store the return address in R14
+  // Retrouver l'adresse de retour dans R14
   WriteLn(FOutputFile, '@5');
   WriteLn(FOutputFile, 'A=D-A');
   WriteLn(FOutputFile, 'D=M');
   WriteLn(FOutputFile, '@R14');
   WriteLn(FOutputFile, 'M=D');
 
-  // Reposition return value for the caller
-  WritePushPop(C_POP, 'argument', 0);
+  // Restaurer la valeur de retour à partir de la pile
+  DecrementStackPointer;
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'D=M');
+  WriteLn(FOutputFile, '@ARG');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
 
   // SP = ARG + 1
   WriteLn(FOutputFile, '@ARG');
@@ -170,7 +175,7 @@ begin
   WriteLn(FOutputFile, '@SP');
   WriteLn(FOutputFile, 'M=D');
 
-  // Restore THAT, THIS, ARG, LCL
+  // Restaurer THAT, THIS, ARG, LCL à partir de R13
   WriteLn(FOutputFile, '@R13');
   WriteLn(FOutputFile, 'AM=M-1');
   WriteLn(FOutputFile, 'D=M');
@@ -195,22 +200,28 @@ begin
   WriteLn(FOutputFile, '@LCL');
   WriteLn(FOutputFile, 'M=D');
 
-  // Jump to the return address
+  // Sauter à l'adresse de retour
   WriteLn(FOutputFile, '@R14');
   WriteLn(FOutputFile, 'A=M');
   WriteLn(FOutputFile, '0;JMP');
 end;
 
-// procedure to Handle function commands
 procedure TCodeWriter.WriteFunction(FunctionName: string; NumLocals: Integer);
 var
   i: Integer;
 begin
-  WriteLabel(FunctionName);
+  // Déclare la fonction
+  WriteLn(FOutputFile, '(' + FunctionName + ')');
 
-  for i := 0 to NumLocals - 1 do
+  // Initialiser les variables locales à 0
+  for i := 1 to NumLocals do
   begin
-    WritePushPop(C_PUSH, 'constant', 0);
+    WriteLn(FOutputFile, '@0');
+    WriteLn(FOutputFile, 'D=A');
+    WriteLn(FOutputFile, '@SP');
+    WriteLn(FOutputFile, 'A=M');
+    WriteLn(FOutputFile, 'M=D');
+    IncrementStackPointer;
   end;
 end;
 
@@ -219,21 +230,51 @@ procedure TCodeWriter.WriteCall(FunctionName: string; NumArgs: Integer);
 var
   ReturnLabel: string;
 begin
+  // Générer une étiquette de retour unique
+  ReturnLabel := FunctionName + '$ret.' + IntToStr(FLabelCount);
   Inc(FLabelCount);
-  ReturnLabel := 'RETURN_LABEL_' + IntToStr(FLabelCount);
-  
-  // Push return address
+
+  // Pousser l'étiquette de retour sur la pile
   WriteLn(FOutputFile, '@' + ReturnLabel);
   WriteLn(FOutputFile, 'D=A');
-  PushDToStack;
+  WriteLn(FOutputFile, '@SP');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
+  IncrementStackPointer;
 
-  // Push LCL, ARG, THIS, THAT
-  WritePushPop(C_PUSH, 'pointer', 0);
-  WritePushPop(C_PUSH, 'pointer', 1);
-  WritePushPop(C_PUSH, 'pointer', 2);
-  WritePushPop(C_PUSH, 'pointer', 3);
+  // Pousser LCL sur la pile
+  WriteLn(FOutputFile, '@LCL');
+  WriteLn(FOutputFile, 'D=M');
+  WriteLn(FOutputFile, '@SP');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
+  IncrementStackPointer;
 
-  // Reposition ARG
+  // Pousser ARG sur la pile
+  WriteLn(FOutputFile, '@ARG');
+  WriteLn(FOutputFile, 'D=M');
+  WriteLn(FOutputFile, '@SP');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
+  IncrementStackPointer;
+
+  // Pousser THIS sur la pile
+  WriteLn(FOutputFile, '@THIS');
+  WriteLn(FOutputFile, 'D=M');
+  WriteLn(FOutputFile, '@SP');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
+  IncrementStackPointer;
+
+  // Pousser THAT sur la pile
+  WriteLn(FOutputFile, '@THAT');
+  WriteLn(FOutputFile, 'D=M');
+  WriteLn(FOutputFile, '@SP');
+  WriteLn(FOutputFile, 'A=M');
+  WriteLn(FOutputFile, 'M=D');
+  IncrementStackPointer;
+
+  // Réinitialiser ARG pour le callee
   WriteLn(FOutputFile, '@SP');
   WriteLn(FOutputFile, 'D=M');
   WriteLn(FOutputFile, '@5');
@@ -243,17 +284,18 @@ begin
   WriteLn(FOutputFile, '@ARG');
   WriteLn(FOutputFile, 'M=D');
 
-  // Reposition LCL
+  // Réinitialiser LCL pour le callee
   WriteLn(FOutputFile, '@SP');
   WriteLn(FOutputFile, 'D=M');
   WriteLn(FOutputFile, '@LCL');
   WriteLn(FOutputFile, 'M=D');
 
-  // Goto function
-  WriteGoto(FunctionName);
+  // Sauter à la fonction
+  WriteLn(FOutputFile, '@' + FunctionName);
+  WriteLn(FOutputFile, '0;JMP');
 
-  // Return label
-  WriteLabel(ReturnLabel);
+  // Étiquette de retour
+  WriteLn(FOutputFile, '(' + ReturnLabel + ')');
 end;
 
 procedure TCodeWriter.WritePushPop(CommandType: TCommandType; Segment: string; Index: Integer);

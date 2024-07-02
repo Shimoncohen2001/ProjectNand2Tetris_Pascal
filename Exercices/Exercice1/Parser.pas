@@ -123,6 +123,8 @@ begin
     Result := C_ARITHMETIC;
 end;
 
+
+//extrait le premier argument d'une commande VM, selon le type de commande
 function TParser.Arg1: string;
 var
   Parts: TStringArray;
@@ -136,6 +138,8 @@ begin
   else
     Result := Parts[1];
 end;
+
+//extrait le deuxième argument d'une commande VM, mais uniquement pour certains types de commandes (C_PUSH, C_POP, C_FUNCTION, C_CALL)
 
 function TParser.Arg2: Integer;
 var

@@ -132,7 +132,10 @@ begin
   WriteLn(FOutputFile, 'D;JNE');
 end;
 
-//// sys.init function cette function nous permet d'initilaliser les segments a partir du test fibonaccielement dont le scrypt n'initialise pas cette fois la pile 
+// sys.init function cette function nous permet d'initilaliser les segments a partir du test fibonaccielement dont le scrypt n'initialise pas cette fois la pile 
+// cette fonction initialise en quelque sorte notre virtuelle machine avant son utilisation
+//les autres test plus simples que fibbonaccielement s'occuper dans le scrpit d'initialiser les differentes valeurs
+
 procedure TCodeWriter.WriteInit;
 begin
   // SP=256

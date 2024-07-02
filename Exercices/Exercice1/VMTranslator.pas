@@ -39,7 +39,6 @@ begin
         CodeWriterInstance.WriteCall(Parser.Arg1, Parser.Arg2);
       C_RETURN:
         CodeWriterInstance.WriteReturn;
-      // Ajoutez d'autres cas comme C_FUNCTION, C_RETURN, C_CALL si nécessaire
     end;
   end;
 

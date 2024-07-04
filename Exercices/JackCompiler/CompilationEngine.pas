@@ -76,7 +76,7 @@ begin
   tokenizer.advance; // '{'
   writeLine('<symbol> { </symbol>');
   
-  tokenizer.advance;
+  tokenizer.advance; // static |field    ou |constructor |function |method
   while tokenizer.TokenType = ttKeyword do
   begin
     if (tokenizer.KeyWord = 'static') or (tokenizer.KeyWord = 'field') then
@@ -137,27 +137,27 @@ begin
   writeLine('<subroutineDec>');
   // 'constructor' | 'function' | 'method'
   writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-  tokenizer.advance;
   
-  // 'void' | type
+  
+  tokenizer.advance;  // 'void' | type
   if tokenizer.TokenType = ttKeyword then
     writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
   else
     writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
-  // subroutineName
+
+  tokenizer.advance; // subroutineName
   writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
-  //expect(SYMBOL, '(');
+  tokenizer.advance; // symbol '(' 
   writeLine('<symbol> ( </symbol>');
-  compileParameterList;
 
-  //expect(SYMBOL, ')');
+  compileParameterList;
+  // j ai bouffer la parenthese fermer
   writeLine('<symbol> ) </symbol>');
+
   //je viens de rajouter ca;
-  tokenizer.advance;
+  //tokenizer.advance;
 
   compileSubroutineBody;
   writeLine('</subroutineDec>');
@@ -166,10 +166,8 @@ end;
 procedure TCompilationEngine.compileSubroutineBody();
 begin
   writeLine('<subroutineBody>');
-  //expect(SYMBOL, '{');
+  tokenizer.advance; // Symbol '{'
   writeLine('<symbol> { </symbol>');
-
-  tokenizer.advance;
   
   // Log the current token type and value
   writeln('Current Token Type: ', Ord(tokenizer.TokenType));
@@ -184,6 +182,7 @@ begin
   else if tokenizer.TokenType = ttStringConst then
     writeln('Current String Constant: ', tokenizer.StringVal);
 
+  tokenizer.advance;// ttKeyword
   while tokenizer.TokenType = ttKeyword do
   begin
     // Log the keyword to ensure it is 'var'
@@ -207,7 +206,7 @@ end;
 procedure TCompilationEngine.compileParameterList();
 begin
   writeLine('<parameterList>');
-  tokenizer.advance;
+  tokenizer.advance;// param or symbol ')'
   while tokenizer.TokenType <> ttSymbol do
   begin
     // type
@@ -238,42 +237,47 @@ end;
 procedure TCompilationEngine.compileVarDec();
 begin
   writeLine('<varDec>');
+  // deja bouffer dans la compilesubroutinebody
   writeLine('<keyword> var </keyword>');
-  tokenizer.advance;
 
-  // type
+
+  tokenizer.advance;//type: int, array ...
   if tokenizer.TokenType = ttKeyword then
     writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
   else
     writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
-  // varName
+  tokenizer.advance; // varName
   writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
+  tokenizer.advance;// symbol: ',' ';' ...
   while tokenizer.TokenType = ttSymbol do
   begin
     if tokenizer.symbol = ',' then
     begin
       writeLine('<symbol> , </symbol>');
-      tokenizer.advance;
+
+      tokenizer.advance;// on bouffe un autre identifieur
       writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
+
       tokenizer.advance;
     end
     else
       break;
   end;
-
-  //expect(SYMBOL, ';');
+  // ';' bouffer dans le while
   writeLine('<symbol> ; </symbol>');
   writeLine('</varDec>');
+
+
+  // a verifier
   tokenizer.advance;
 end;
 
 procedure TCompilationEngine.compileStatements();
 begin
   writeLine('<statements>');
+  // le currentoken qui est verifier en dessous a ete bouffer dans Compilesubroutinebody
   while tokenizer.TokenType = ttKeyword do
   begin
     if tokenizer.KeyWord = 'let' then
@@ -290,6 +294,18 @@ begin
       break;
   end;
   writeLine('</statements>');
+
+  // Log the current token type and value after compileStatements
+  writeln('Exiting compileStatements - Current Token Type: ', Ord(tokenizer.TokenType));
+  case tokenizer.TokenType of
+    ttKeyword: writeln('Current Keyword: ', tokenizer.KeyWord);
+    ttSymbol: writeln('Current Symbol: ', tokenizer.Symbol);
+    ttIdentifier: writeln('Current Identifier: ', tokenizer.Identifier);
+    ttIntConst: writeln('Current Integer Constant: ', tokenizer.IntVal);
+    ttStringConst: writeln('Current String Constant: ', tokenizer.StringVal);
+  else
+    writeln('Unknown Token Type');
+  end;
 end;
 
 procedure TCompilationEngine.compileDo();
@@ -319,33 +335,37 @@ end;
 procedure TCompilationEngine.compileLet();
 begin
   writeLine('<letStatement>');
+  // on a bouffer deja le let dans statement;
   writeLine('<keyword> let </keyword>');
-  tokenizer.advance;
 
-  // varName
+  tokenizer.advance;// varName
   writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
+  tokenizer.advance;// on bouffe soit un = sois un '['
   if tokenizer.symbol = '[' then
   begin
     writeLine('<symbol> [ </symbol>');
-    tokenizer.advance;
 
+    tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
     compileExpression;
 
     //expect(SYMBOL, ']');
     writeLine('<symbol> ] </symbol>');
   end;
 
-  //expect(SYMBOL, '=');
+  //on a bouffer le = au dessus
   writeLine('<symbol> = </symbol>');
-
+  
+  tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
   compileExpression;
 
   //expect(SYMBOL, ';');
   writeLine('<symbol> ; </symbol>');
   writeLine('</letStatement>');
   tokenizer.advance;
+  tokenizer.advance;
+  // ajout d un log  dans la fonction compilelet;
+  writeln('affichage du current token en sortant pour la derniere fois de la fonction CompileLet ',tokenizer.tokenType);
 end;
 
 procedure TCompilationEngine.compileWhile();
@@ -447,31 +467,44 @@ procedure TCompilationEngine.compileTerm();
 begin
   writeLine('<term>');
 
+  // Log the current token type before entering the case statement
+  writeln('Current Token Type: ', Ord(tokenizer.TokenType));
+  // il y avait un advance avant qu on se pose aevc yona serieusemet
+
   case tokenizer.TokenType of
     ttIntConst:
     begin
+      writeln('Matched Token Type: ttIntConst');
       writeLine('<integerConstant> ' + IntToStr(tokenizer.IntVal) + ' </integerConstant>');
-      tokenizer.advance;
+      
+      tokenizer.advance;// on bouffe pr la suite
     end;
     ttStringConst:
     begin
+      writeln('Matched Token Type: ttStringConst');
       writeLine('<stringConstant> ' + tokenizer.StringVal + ' </stringConstant>');
-      tokenizer.advance;
+
+      tokenizer.advance;// on bouffe pr la suite
     end;
     ttKeyword:
     begin
+      writeln('Matched Token Type: ttKeyword');
       writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-      tokenizer.advance;
+
+      tokenizer.advance;// on bouffe pr la suite
     end;
     ttIdentifier:
     begin
+      writeln('Matched Token Type: ttIdentifier');
       writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-      tokenizer.advance;
+
+      tokenizer.advance;// on bouffe pr la suite
 
       if tokenizer.symbol = '[' then
       begin
         writeLine('<symbol> [ </symbol>');
-        tokenizer.advance;
+
+        tokenizer.advance;//
         compileExpression;
         //expect(SYMBOL, ']');
         writeLine('<symbol> ] </symbol>');
@@ -483,6 +516,8 @@ begin
         compileExpressionList;
         //expect(SYMBOL, ')');
         writeLine('<symbol> ) </symbol>');
+        // viens aussi de rajouter ca
+        tokenizer.advance;
       end
       else if tokenizer.symbol = '.' then
       begin
@@ -499,6 +534,7 @@ begin
     end;
     ttSymbol:
     begin
+      writeln('Matched Token Type: ttSymbol');
       if tokenizer.symbol = '(' then
       begin
         writeLine('<symbol> ( </symbol>');
@@ -514,6 +550,8 @@ begin
         compileTerm;
       end;
     end;
+  else
+    writeln('No matching Token Type found');
   end;
 
   writeLine('</term>');

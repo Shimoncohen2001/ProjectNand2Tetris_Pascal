@@ -39,9 +39,6 @@
 <symbol> = </symbol>
 <expression>
 <term>
-</term>
-<symbol> = </symbol>
-<term>
 <identifier> Keyboard </identifier>
 <symbol> . </symbol>
 <identifier> readInt </identifier>
@@ -60,6 +57,45 @@
 </expression>
 </expressionList>
 <symbol> ) </symbol>
+</term>
+</expression>
+<symbol> ; </symbol>
+</letStatement>
+<letStatement>
+<keyword> let </keyword>
+<identifier> a </identifier>
+<symbol> = </symbol>
+<expression>
+<term>
+<identifier> Array </identifier>
+<symbol> . </symbol>
+<identifier> new </identifier>
+<symbol> ( </symbol>
+<expressionList>
+<expression>
+<term>
+<symbol> ( </symbol>
+<expression>
+<term>
+<identifier> length </identifier>
+</term>
+</expression>
+<symbol> ) </symbol>
+</term>
+</expression>
+</expressionList>
+<symbol> ) </symbol>
+</term>
+</expression>
+<symbol> ; </symbol>
+</letStatement>
+<letStatement>
+<keyword> let </keyword>
+<identifier> i </identifier>
+<symbol> = </symbol>
+<expression>
+<term>
+<integerConstant> 0 </integerConstant>
 </term>
 </expression>
 <symbol> ; </symbol>

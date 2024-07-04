@@ -293,27 +293,38 @@ end;
 
 procedure TCompilationEngine.compileDo();
 begin
+// a ete bouffe par la fonction qui a appele do
   writeLine('<doStatement>');
   writeLine('<keyword> do </keyword>');
-  tokenizer.advance;
 
-  // subroutineCall
+  tokenizer.advance; // Consomme output
   writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
 
-  //expect(SYMBOL, '(');
+  tokenizer.advance; // Consomme le .
+  if tokenizer.symbol = '.' then
+  begin
+    writeLine('<symbol> . </symbol>');
+
+    tokenizer.advance; // Consomme printstring
+    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
+
+    tokenizer.advance; // Consomme (
+  end;
   writeLine('<symbol> ( </symbol>');
 
+  
+  tokenizer.advance;// on bouff THE AVERAGE IS
   compileExpressionList;
 
-  //expect(SYMBOL, ')');
+  // on a Consomme le symbole ')' dans la fonction qui renvoie cad CompileExpressionList
   writeLine('<symbol> ) </symbol>');
 
-  //expect(SYMBOL, ';');
+  tokenizer.advance;  // Consomme le symbole ';'
   writeLine('<symbol> ; </symbol>');
   writeLine('</doStatement>');
   tokenizer.advance;
 end;
+
 
 procedure TCompilationEngine.compileLet();
 begin
@@ -368,14 +379,17 @@ begin
   //expect(SYMBOL, ')');
   writeLine('<symbol> ) </symbol>');
 
+  tokenizer.advance;// on bouffe {
   //expect(SYMBOL, '{');
   writeLine('<symbol> { </symbol>');
 
+  tokenizer.advance;//on bouffe let
   compileStatements;
 
   //expect(SYMBOL, '}');
   writeLine('<symbol> } </symbol>');
   writeLine('</whileStatement>');
+
   tokenizer.advance;
 end;
 
@@ -383,8 +397,8 @@ procedure TCompilationEngine.compileReturn();
 begin
   writeLine('<returnStatement>');
   writeLine('<keyword> return </keyword>');
-  tokenizer.advance;
 
+  tokenizer.advance;//on bouffe ; ou autre chose
   if tokenizer.TokenType <> ttSymbol then
     compileExpression;
 
@@ -442,7 +456,8 @@ begin
   while (tokenizer.TokenType = ttSymbol) and (tokenizer.symbol in ['+', '-', '*', '/', '&', '|', '<', '>', '=']) do
   begin
     writeLine('<symbol> ' + tokenizer.symbol + ' </symbol>');
-    tokenizer.advance;
+
+    tokenizer.advance;//on bouffe lengh
     compileTerm;
   end;
 
@@ -475,7 +490,7 @@ begin
     begin
       writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
 
-      tokenizer.advance;// on bouffe un sybol ex '.', <
+      tokenizer.advance;// on bouffe un sybol ex '.', <,)
       if tokenizer.TokenType = ttSymbol then
       begin
         if tokenizer.Symbol = '[' then

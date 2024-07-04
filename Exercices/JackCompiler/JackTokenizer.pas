@@ -63,67 +63,100 @@ var
   line: string;
   i: Integer;
   token: string;
+  inCommentBlock: Boolean;
 
   procedure AddToken(const AToken: string);
   begin
     if AToken <> '' then
+    begin
       tokens.Add(AToken);
+      WriteLn('Token added: ', AToken); // Debug: Show added token
+    end;
   end;
 
 begin
+  inCommentBlock := False;
   while not Eof(inputFile) do
   begin
     ReadLn(inputFile, line);
     i := 1;
     while i <= Length(line) do
     begin
-      case line[i] of
-        ' ', #9, #10, #13:
-          Inc(i); // Skip whitespace
-        'a'..'z', 'A'..'Z', '_':
-          begin
-            token := '';
-            while (i <= Length(line)) and (line[i] in ['a'..'z', 'A'..'Z', '_', '0'..'9']) do
-            begin
-              token := token + line[i];
-              Inc(i);
-            end;
-            AddToken(token);
-          end;
-        '0'..'9':
-          begin
-            token := '';
-            while (i <= Length(line)) and (line[i] in ['0'..'9']) do
-            begin
-              token := token + line[i];
-              Inc(i);
-            end;
-            AddToken(token);
-          end;
-        '"':
-        //a verfiier pcq shimon a dit de ne pas prendre ne compte les guillemets
-          begin
-            token := '"';
-            Inc(i);
-            while (i <= Length(line)) and (line[i] <> '"') do
-            begin
-              token := token + line[i];
-              Inc(i);
-            end;
-            if (i <= Length(line)) and (line[i] = '"') then
-            begin
-              token := token + '"';
-              Inc(i);
-            end;
-            AddToken(token);
-          end;
-        '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~':
-          begin
-            AddToken(line[i]);
-            Inc(i);
-          end;
+      if inCommentBlock then
+      begin
+        // Check for end of block comment
+        if (i < Length(line)) and (line[i] = '*') and (line[i + 1] = '/') then
+        begin
+          inCommentBlock := False;
+          Inc(i, 2); // Skip the '*/'
+        end
         else
-          Inc(i); // Handle invalid characters or comments here if needed
+        begin
+          Inc(i); // Continue skipping characters inside block comment
+        end;
+      end
+      else
+      begin
+        case line[i] of
+          ' ', #9, #10, #13:
+            Inc(i); // Skip whitespace
+          'a'..'z', 'A'..'Z', '_':
+            begin
+              token := '';
+              while (i <= Length(line)) and (line[i] in ['a'..'z', 'A'..'Z', '_', '0'..'9']) do
+              begin
+                token := token + line[i];
+                Inc(i);
+              end;
+              AddToken(token);
+            end;
+          '0'..'9':
+            begin
+              token := '';
+              while (i <= Length(line)) and (line[i] in ['0'..'9']) do
+              begin
+                token := token + line[i];
+                Inc(i);
+              end;
+              AddToken(token);
+            end;
+          '"':
+            begin
+              token := '"';
+              Inc(i);
+              while (i <= Length(line)) and (line[i] <> '"') do
+              begin
+                token := token + line[i];
+                Inc(i);
+              end;
+              if (i <= Length(line)) and (line[i] = '"') then
+              begin
+                token := token + '"';
+                Inc(i);
+              end;
+              AddToken(token);
+            end;
+          '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~':
+            begin
+              // Check for start of comments
+              if (line[i] = '/') and (i < Length(line)) then
+              begin
+                case line[i + 1] of
+                  '/': Break; // Line comment: skip rest of the line
+                  '*':
+                    begin
+                      inCommentBlock := True; // Block comment
+                      Inc(i, 2);
+                      Continue;
+                    end;
+                end;
+              end;
+              AddToken(line[i]);
+              Inc(i);
+            end;
+          else
+            Inc(i); // Handle invalid characters or comments here if needed
+        end;
       end;
     end;
   end;
@@ -169,10 +202,14 @@ begin
   for i := Low(TKeyword) to High(TKeyword) do
   begin
     if Keywords[i] = currentToken then
-      Result:=Keywords[i];
+    begin
+      Result := Keywords[i];
+      Exit;
+    end;
   end;
   raise Exception.Create('Invalid keyword');
 end;
+
 
 function TJackTokenizer.symbol(): Char;
 begin

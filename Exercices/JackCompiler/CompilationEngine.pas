@@ -168,26 +168,10 @@ begin
   writeLine('<subroutineBody>');
   tokenizer.advance; // Symbol '{'
   writeLine('<symbol> { </symbol>');
-  
-  // Log the current token type and value
-  writeln('Current Token Type: ', Ord(tokenizer.TokenType));
-  if tokenizer.TokenType = ttKeyword then
-    writeln('Current Keyword: ', tokenizer.KeyWord)
-  else if tokenizer.TokenType = ttSymbol then
-    writeln('Current Symbol: ', tokenizer.Symbol)
-  else if tokenizer.TokenType = ttIdentifier then
-    writeln('Current Identifier: ', tokenizer.Identifier)
-  else if tokenizer.TokenType = ttIntConst then
-    writeln('Current Integer Constant: ', tokenizer.IntVal)
-  else if tokenizer.TokenType = ttStringConst then
-    writeln('Current String Constant: ', tokenizer.StringVal);
 
-  tokenizer.advance;// ttKeyword
+  tokenizer.advance; // Expecting either 'var' keyword or statement
   while tokenizer.TokenType = ttKeyword do
   begin
-    // Log the keyword to ensure it is 'var'
-    writeln('Current Keyword in Loop: ', tokenizer.KeyWord);
-
     if tokenizer.KeyWord = 'var' then
       compileVarDec
     else
@@ -196,10 +180,9 @@ begin
 
   compileStatements;
 
-  //expect(SYMBOL, '}');
   writeLine('<symbol> } </symbol>');
   writeLine('</subroutineBody>');
-  tokenizer.advance;
+  tokenizer.advance; // Consume the closing '}' symbol
 end;
 
 
@@ -359,11 +342,12 @@ begin
   tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
   compileExpression;
 
-  //expect(SYMBOL, ';');
+  //on a deja bouffer ; dans Compileexpression
   writeLine('<symbol> ; </symbol>');
   writeLine('</letStatement>');
-  tokenizer.advance;
-  tokenizer.advance;
+
+  tokenizer.advance;// on bouffe le while, }
+
   // ajout d un log  dans la fonction compilelet;
   writeln('affichage du current token en sortant pour la derniere fois de la fonction CompileLet ',tokenizer.tokenType);
 end;
@@ -372,11 +356,13 @@ procedure TCompilationEngine.compileWhile();
 begin
   writeLine('<whileStatement>');
   writeLine('<keyword> while </keyword>');
-  tokenizer.advance;
 
-  //expect(SYMBOL, '(');
+  tokenizer.advance;//(
+
+  //on a bouffe une (
   writeLine('<symbol> ( </symbol>');
 
+  tokenizer.advance;
   compileExpression;
 
   //expect(SYMBOL, ')');
@@ -467,112 +453,101 @@ procedure TCompilationEngine.compileTerm();
 begin
   writeLine('<term>');
 
-  // Log the current token type before entering the case statement
-  writeln('Current Token Type: ', Ord(tokenizer.TokenType));
-  // il y avait un advance avant qu on se pose aevc yona serieusemet
-
   case tokenizer.TokenType of
     ttIntConst:
     begin
-      writeln('Matched Token Type: ttIntConst');
-      writeLine('<integerConstant> ' + IntToStr(tokenizer.IntVal) + ' </integerConstant>');
-      
-      tokenizer.advance;// on bouffe pr la suite
+      writeLine('<integerConstant> ' + IntToStr(tokenizer.IntVal) + ' </integerConstant>');// on a deja bouffer le 0 dans expression 
+
+      tokenizer.advance;// on bouffe ;
     end;
     ttStringConst:
     begin
-      writeln('Matched Token Type: ttStringConst');
       writeLine('<stringConstant> ' + tokenizer.StringVal + ' </stringConstant>');
-
-      tokenizer.advance;// on bouffe pr la suite
+      
+      tokenizer.advance;// on bouffe symbol ')'
     end;
     ttKeyword:
     begin
-      writeln('Matched Token Type: ttKeyword');
       writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-
-      tokenizer.advance;// on bouffe pr la suite
+      tokenizer.advance;
     end;
     ttIdentifier:
     begin
-      writeln('Matched Token Type: ttIdentifier');
       writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
 
-      tokenizer.advance;// on bouffe pr la suite
+      tokenizer.advance;// on bouffe un sybol ex '.', <
+      if tokenizer.TokenType = ttSymbol then
+      begin
+        if tokenizer.Symbol = '[' then
+        begin
+          writeLine('<symbol> [ </symbol>');
+          tokenizer.advance;
+          compileExpression;
+          writeLine('<symbol> ] </symbol>');
+          tokenizer.advance;
+        end
+        else if tokenizer.Symbol = '(' then
+        begin
+          writeLine('<symbol> ( </symbol>');
+          tokenizer.advance;
+          compileExpressionList;
+          writeLine('<symbol> ) </symbol>');
+          tokenizer.advance; // Consume closing ')'
+        end
+        else if tokenizer.Symbol = '.' then
+        begin
+          writeLine('<symbol> . </symbol>');
 
-      if tokenizer.symbol = '[' then
-      begin
-        writeLine('<symbol> [ </symbol>');
+          tokenizer.advance;// on bouffe un identifieur ex: readinit ou new
+          writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
 
-        tokenizer.advance;//
-        compileExpression;
-        //expect(SYMBOL, ']');
-        writeLine('<symbol> ] </symbol>');
-      end
-      else if tokenizer.symbol = '(' then
-      begin
-        writeLine('<symbol> ( </symbol>');
-        tokenizer.advance;
-        compileExpressionList;
-        //expect(SYMBOL, ')');
-        writeLine('<symbol> ) </symbol>');
-        // viens aussi de rajouter ca
-        tokenizer.advance;
-      end
-      else if tokenizer.symbol = '.' then
-      begin
-        writeLine('<symbol> . </symbol>');
-        tokenizer.advance;
-        writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-        tokenizer.advance;
-        //expect(SYMBOL, '(');
-        writeLine('<symbol> ( </symbol>');
-        compileExpressionList;
-        //expect(SYMBOL, ')');
-        writeLine('<symbol> ) </symbol>');
+          tokenizer.advance;// forecement un (
+          writeLine('<symbol> ( </symbol>');
+
+          tokenizer.advance;// on bouffe expression "exrpression"
+          compileExpressionList;
+          writeLine('<symbol> ) </symbol>');// on a bouff la ) avant
+
+          tokenizer.advance; // on bouffe ;
+        end;
       end;
     end;
     ttSymbol:
     begin
-      writeln('Matched Token Type: ttSymbol');
-      if tokenizer.symbol = '(' then
+      if tokenizer.Symbol = '(' then
       begin
         writeLine('<symbol> ( </symbol>');
         tokenizer.advance;
         compileExpression;
-        //expect(SYMBOL, ')');
         writeLine('<symbol> ) </symbol>');
+        tokenizer.advance; // Consume closing ')'
       end
-      else if tokenizer.symbol in ['-', '~'] then
+      else if tokenizer.Symbol in ['-', '~'] then
       begin
-        writeLine('<symbol> ' + tokenizer.symbol + ' </symbol>');
+        writeLine('<symbol> ' + tokenizer.Symbol + ' </symbol>');
         tokenizer.advance;
         compileTerm;
       end;
     end;
-  else
-    writeln('No matching Token Type found');
   end;
 
   writeLine('</term>');
 end;
 
+
 procedure TCompilationEngine.compileExpressionList();
 begin
   writeLine('<expressionList>');
-
-  if tokenizer.symbol <> ')' then
+  if tokenizer.TokenType <> ttSymbol then // Correct condition to check if expression list is not empty
   begin
     compileExpression;
-
-    while tokenizer.symbol = ',' do
+    while tokenizer.Symbol = ',' do
     begin
       writeLine('<symbol> , </symbol>');
-      tokenizer.advance;
+      tokenizer.advance; // Consume the comma
       compileExpression;
     end;
   end;
-
   writeLine('</expressionList>');
 end;
 

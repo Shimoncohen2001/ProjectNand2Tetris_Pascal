@@ -345,10 +345,11 @@ begin
 
     //expect(SYMBOL, ']');
     writeLine('<symbol> ] </symbol>');
+    tokenizer.advance;// j'ajoute ce advance pour que on affiche une seule fois le = apres un ]. et dans ce cas il est affiche a la ligne 351 en dessous;
   end;
-
   //on a bouffer le = au dessus
   writeLine('<symbol> = </symbol>');
+  //on affiche ici et aussi dans compileExpression un = c un pblm
   
   tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
   compileExpression;
@@ -411,42 +412,49 @@ end;
 procedure TCompilationEngine.compileIf();
 begin
   writeLine('<ifStatement>');
+  // on avait boufé le if dans statements
   writeLine('<keyword> if </keyword>');
-  tokenizer.advance;
 
-  //expect(SYMBOL, '(');
+  tokenizer.advance;  //on boufe la '('
   writeLine('<symbol> ( </symbol>');
 
+  tokenizer.advance;  // on boufe pour compileExpression
   compileExpression;
 
-  //expect(SYMBOL, ')');
+  //on a boufé dans compileExpression la '('
   writeLine('<symbol> ) </symbol>');
 
-  //expect(SYMBOL, '{');
+  tokenizer.advance;  //on bouffe le '{'
   writeLine('<symbol> { </symbol>');
 
+  tokenizer.advance;  //on bouffe pr compileSatements
   compileStatements;
 
-  //expect(SYMBOL, '}');
+  // on a bouffé dans compileSatements
   writeLine('<symbol> } </symbol>');
+
+  tokenizer.advance;  //on bouffe pr le else
 
   if tokenizer.KeyWord = 'else' then
   begin
-    tokenizer.advance;
     writeLine('<keyword> else </keyword>');
 
-    //expect(SYMBOL, '{');
+    tokenizer.advance;  //on bouffe pr le '{'
     writeLine('<symbol> { </symbol>');
 
+    tokenizer.advance;  //on bouffe pr le compileStatements
     compileStatements;
 
-    //expect(SYMBOL, '}');
+    // on l'a bouffé ailleurs
     writeLine('<symbol> } </symbol>');
+
+      tokenizer.advance;  // on bouffe pr la suite
   end;
 
   writeLine('</ifStatement>');
-  tokenizer.advance;
+  // si tu es rentré dans le else alors tu as boufé pr la suite, sinon tu as boufé deja avant le else donc pas besoin de reboufé
 end;
+
 
 procedure TCompilationEngine.compileExpression();
 begin

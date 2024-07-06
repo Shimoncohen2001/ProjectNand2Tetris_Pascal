@@ -560,7 +560,7 @@ end;
 
 procedure TCompilationEngine.compileExpressionList();
 begin
-  writeLine('<expressionList>');
+  writeLine('<expressionList>');// soucis ici dans les expressions xdu type ((x+2)+...)la deuxieme ( empechera de rentrer dans le if en dessous 
   if tokenizer.TokenType <> ttSymbol then // Correct condition to check if expression list is not empty
   begin
     compileExpression;

@@ -207,7 +207,8 @@ begin
       Exit;
     end;
   end;
-  raise Exception.Create('Invalid keyword');
+  writeln('pas le bon keyword!!!!!!');
+  //raise Exception.Create('Invalid keyword');
 end;
 
 

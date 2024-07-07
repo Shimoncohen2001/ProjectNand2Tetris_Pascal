@@ -561,7 +561,8 @@ end;
 procedure TCompilationEngine.compileExpressionList();
 begin
   writeLine('<expressionList>');// soucis ici dans les expressions xdu type ((x+2)+...)la deuxieme ( empechera de rentrer dans le if en dessous 
-  if tokenizer.TokenType <> ttSymbol then // Correct condition to check if expression list is not empty
+  //if tokenizer.TokenType <> ttSymbol then
+  if (((tokenizer.TokenType = ttSymbol) and (tokenizer.Symbol='(')) or (tokenizer.TokenType = ttIdentifier) or (tokenizer.TokenType= ttIntConst) or (tokenizer.TokenType=ttKeyword)) then // Correct condition to check if expression list is not empty
   begin
     compileExpression;
     while tokenizer.Symbol = ',' do

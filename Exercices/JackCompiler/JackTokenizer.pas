@@ -15,12 +15,13 @@ type
   TJackTokenizer = class
   private
     inputFile: TextFile;
-    currentToken: string;
+    //currentToken: string;// remettre current topken en priv
     tokens: TStringList;
     currentTokenIndex: Integer;
     procedure tokenizeInput;
     function isKeyword(const token: string): Boolean;
   public
+    currentToken: string;
     constructor Create(filename: string);
     destructor Destroy; override;
     function hasMoreTokens(): Boolean;
@@ -191,8 +192,10 @@ begin
   end
   else if (Length(currentToken) > 1) and (currentToken[1] = '"') and (currentToken[Length(currentToken)] = '"') then
     Result := ttStringConst
-  else
-    Result := ttIdentifier;
+  else if (currentToken[1] in ['0'..'9']) then
+    Result := ttIntConst
+  else 
+    Result:= ttIdentifier;
 end;
 
 function TJackTokenizer.keyWord(): string;
@@ -208,6 +211,7 @@ begin
     end;
   end;
   writeln('pas le bon keyword!!!!!!');
+  writeln(currentToken);
   //raise Exception.Create('Invalid keyword');
 end;
 

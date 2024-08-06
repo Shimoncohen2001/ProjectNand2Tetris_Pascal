@@ -1,22 +1,27 @@
-
 {$mode objfpc}
+
 unit CompilationEngine;
 
 interface
 
 uses
-  JackTokenizer,SysUtils;
+  JackTokenizer, SysUtils, SymbolTable, VMWriter;
 
 type
   TCompilationEngine = class
   private
     tokenizer: TJackTokenizer;
-    outputFile: TextFile;
-    //symbolTable: TSymbolTable;
-    procedure writeLine(const line: string);
-    //procedure //expect(tokenType: TTokenType; const value: string);
+    vmWriter: TVMWriter;
+    symbolTable: TSymbolTable;
+    currentClassName: string;
+    subroutineName:string;
+    procedure expect(tokenType: TTokenType; const value: string);
+    procedure compileExpression();
+    procedure compileTerm();
+    procedure compileExpressionList();
   public
-    constructor Create(t: TJackTokenizer; outputFileName: string);
+    Fnumargs : integer;
+    constructor Create(t: TJackTokenizer; const outputFileName: string);
     destructor Destroy; override;
     procedure compileClass();
     procedure compileClassVarDec();
@@ -30,53 +35,42 @@ type
     procedure compileWhile();
     procedure compileReturn();
     procedure compileIf();
-    procedure compileExpression();
-    procedure compileTerm();
-    procedure compileExpressionList();
   end;
 
 implementation
 
-constructor TCompilationEngine.Create(t: TJackTokenizer; outputFileName: string);
+constructor TCompilationEngine.Create(t: TJackTokenizer; const outputFileName: string);
 begin
   tokenizer := t;
-  AssignFile(outputFile, outputFileName);
-  Rewrite(outputFile);
-  //symbolTable := TSymbolTable.Create;
+  vmWriter := TVMWriter.Create(outputFileName);
+  symbolTable := TSymbolTable.Create;
 end;
 
 destructor TCompilationEngine.Destroy;
 begin
-  CloseFile(outputFile);
-  //symbolTable.Free;
+  vmWriter.close;
+  vmWriter.Free;
+  symbolTable.Free;
   inherited Destroy;
 end;
 
-procedure TCompilationEngine.writeLine(const line: string);
+procedure TCompilationEngine.expect(tokenType: TTokenType; const value: string);
 begin
-  WriteLn(outputFile, line);
+  if (tokenizer.TokenType <> tokenType) or (tokenizer.KeyWord <> value) then
+    raise Exception.CreateFmt('Expected %s, but found %s', [value, tokenizer.KeyWord]);
+  tokenizer.advance;
 end;
-
-//procedure TCompilationEngine.////expect(tokenType: TTokenType; const value: string);
-//begin
-//  if (tokenizer.TokenType <> tokenType) or (tokenizer.KeyWord <> value) then
-//    raise Exception.CreateFmt('////expected %s, but found %s', [value, tokenizer.KeyWord]);
-//  tokenizer.advance;
-//end;
 
 procedure TCompilationEngine.compileClass();
 begin
-  writeLine('<class>');
   tokenizer.advance; // 'class'
-  writeLine('<keyword> class </keyword>');
-  
   tokenizer.advance; // className
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  
+  currentClassName := tokenizer.Identifier;
   tokenizer.advance; // '{'
-  writeLine('<symbol> { </symbol>');
-  
-  tokenizer.advance; // static |field    ou |constructor |function |method
+
+  tokenizer.advance; // static |field ou |constructor |function |method
+  writeln('dernier advance de la fonction compile class');
+  writeln(tokenizer.currentToken);
   while tokenizer.TokenType = ttKeyword do
   begin
     if (tokenizer.KeyWord = 'static') or (tokenizer.KeyWord = 'field') then
@@ -86,181 +80,187 @@ begin
   end;
 
   while (tokenizer.TokenType = ttKeyword) and
-        ((tokenizer.KeyWord = 'constructor') or (tokenizer.KeyWord = 'function') or (tokenizer.KeyWord = 'method')) do
+    ((tokenizer.KeyWord = 'constructor') or (tokenizer.KeyWord = 'function') or (tokenizer.KeyWord = 'method')) do
   begin
     compileSubroutine;
   end;
 
-  writeLine('<symbol> } </symbol>');
-  writeLine('</class>');
+  //tokenizer.advance; // '}'
 end;
 
 procedure TCompilationEngine.compileClassVarDec();
+var
+  kind: TSymbolKind;
+  varName, varType: string;
 begin
-  writeLine('<classVarDec>');
+
   // 'static' | 'field'
-  writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-  tokenizer.advance;
-  
+
+  if tokenizer.KeyWord = 'static' then
+    kind := skStatic
+  else
+    kind := skField;
+
+  tokenizer.advance; // 'static' | 'field'
+
   // type
   if tokenizer.TokenType = ttKeyword then
-    writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
+  begin
+    varType := tokenizer.KeyWord;
+  end
   else
-    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
+  begin
+    varType := tokenizer.Identifier;
+  end;
   
+  tokenizer.advance; // type
+
   // varName
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-  tokenizer.advance;
+  varName := tokenizer.Identifier;
+  symbolTable.define(varName, varType, kind);
+  tokenizer.advance; // varName
 
   while tokenizer.TokenType = ttSymbol do
   begin
     if tokenizer.symbol = ',' then
     begin
-      writeLine('<symbol> , </symbol>');
-      tokenizer.advance;
-      writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-      tokenizer.advance;
+      tokenizer.advance; // ','
+
+      varName := tokenizer.Identifier;
+      symbolTable.define(varName, varType, kind);
+      tokenizer.advance; // next varName
     end
     else
       break;
   end;
 
-  //expect(SYMBOL, ';');
-  writeLine('<symbol> ; </symbol>');
-  writeLine('</classVarDec>');
-  tokenizer.advance;
+  // Expecting ';'
+  //expect(ttSymbol, ';');
+
+  tokenizer.advance; // ';'
 end;
 
 procedure TCompilationEngine.compileSubroutine();
+var
+  subroutineType: string;
+  //numLocals: Integer;
 begin
-  writeLine('<subroutineDec>');
   // 'constructor' | 'function' | 'method'
-  writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-  
-  
+  subroutineType := tokenizer.KeyWord;
   tokenizer.advance;  // 'void' | type
-  if tokenizer.TokenType = ttKeyword then
-    writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
-  else
-    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-
   tokenizer.advance; // subroutineName
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
+  subroutineName := tokenizer.Identifier;
   tokenizer.advance; // symbol '(' 
-  writeLine('<symbol> ( </symbol>');
+  symbolTable.startSubroutine; // Reset subroutine scope
+
+  // If the subroutine is a method, we need to account for "this" in the symbol table
+  if subroutineType = 'method' then
+    symbolTable.define('this', currentClassName, skArg);
 
   compileParameterList;
-  // j ai bouffer la parenthese fermer
-  writeLine('<symbol> ) </symbol>');
-
-  //je viens de rajouter ca;
-  //tokenizer.advance;
+  
+  //tokenizer.advance; // ')'
+  //numLocals := symbolTable.varCount(skVar);
+  //vmWriter.writeFunction(currentClassName + '.' + subroutineName, numLocals);
 
   compileSubroutineBody;
-  writeLine('</subroutineDec>');
+
+  // Write the function declaration to VM
+  //numLocals := symbolTable.varCount(skVar);
+  //vmWriter.writeFunction(currentClassName + '.' + subroutineName, numLocals);
 end;
 
 procedure TCompilationEngine.compileSubroutineBody();
+var 
+numLocals: Integer;
 begin
-  writeLine('<subroutineBody>');
   tokenizer.advance; // Symbol '{'
-  writeLine('<symbol> { </symbol>');
-
   tokenizer.advance; // Expecting either 'var' keyword or statement
-  while tokenizer.TokenType = ttKeyword do
+  while (tokenizer.TokenType = ttKeyword) and (tokenizer.KeyWord = 'var') do
   begin
-    if tokenizer.KeyWord = 'var' then
-      compileVarDec
-    else
-      break;
+    compileVarDec;
+    //tokenizer.advance; // Move to the next token after var declaration
   end;
+  numLocals := symbolTable.varCount(skVar);
+  vmWriter.writeFunction(currentClassName + '.' + subroutineName, numLocals);
 
   compileStatements;
-
-  writeLine('<symbol> } </symbol>');
-  writeLine('</subroutineBody>');
+  //expect(ttSymbol, '}');
   tokenizer.advance; // Consume the closing '}' symbol
 end;
 
 
 procedure TCompilationEngine.compileParameterList();
+var
+  varType, varName: string;
 begin
-  writeLine('<parameterList>');
-  tokenizer.advance;// param or symbol ')'
+  tokenizer.advance; // param or symbol ')'
   while tokenizer.TokenType <> ttSymbol do
   begin
     // type
     if tokenizer.TokenType = ttKeyword then
-      writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
+    begin
+      varType := tokenizer.KeyWord;
+    end
     else
-      writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-    tokenizer.advance;
+    begin
+      varType := tokenizer.Identifier;
+    end;
+    tokenizer.advance; // type
 
     // varName
-    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-    tokenizer.advance;
+    varName := tokenizer.Identifier;
+    symbolTable.define(varName, varType, skArg);
+    tokenizer.advance; // varName
 
     if tokenizer.TokenType = ttSymbol then
     begin
       if tokenizer.symbol = ',' then
       begin
-        writeLine('<symbol> , </symbol>');
-        tokenizer.advance;
+        tokenizer.advance; // ','
       end
       else
         break;
     end;
   end;
-  writeLine('</parameterList>');
 end;
 
+
 procedure TCompilationEngine.compileVarDec();
+var
+  varType, varName: string;
 begin
-  writeLine('<varDec>');
-  // deja bouffer dans la compilesubroutinebody
-  writeLine('<keyword> var </keyword>');
-
-
-  tokenizer.advance;//type: int, array ...
+  tokenizer.advance; // type: int, array ...
   if tokenizer.TokenType = ttKeyword then
-    writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>')
+  begin
+    varType := tokenizer.KeyWord;
+  end
   else
-    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
+  begin
+    varType := tokenizer.Identifier;
+  end;
 
   tokenizer.advance; // varName
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-  tokenizer.advance;// symbol: ',' ';' ...
+  varName := tokenizer.Identifier;
+  symbolTable.define(varName, varType, skVar);
+  tokenizer.advance; // symbol: ',' ';' ...
   while tokenizer.TokenType = ttSymbol do
   begin
     if tokenizer.symbol = ',' then
     begin
-      writeLine('<symbol> , </symbol>');
-
-      tokenizer.advance;// on bouffe un autre identifieur
-      writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
+      tokenizer.advance; // consume another identifier
+      varName := tokenizer.Identifier;
+      symbolTable.define(varName, varType, skVar);
       tokenizer.advance;
     end
     else
       break;
   end;
-  // ';' bouffer dans le while
-  writeLine('<symbol> ; </symbol>');
-  writeLine('</varDec>');
-
-
-  // a verifier
   tokenizer.advance;
 end;
 
 procedure TCompilationEngine.compileStatements();
 begin
-  writeLine('<statements>');
-  // le currentoken qui est verifier en dessous a ete bouffer dans Compilesubroutinebody
   while tokenizer.TokenType = ttKeyword do
   begin
     if tokenizer.KeyWord = 'let' then
@@ -276,303 +276,310 @@ begin
     else
       break;
   end;
-  writeLine('</statements>');
-
-  // Log the current token type and value after compileStatements
-  writeln('Exiting compileStatements - Current Token Type: ', Ord(tokenizer.TokenType));
-  case tokenizer.TokenType of
-    ttKeyword: writeln('Current Keyword: ', tokenizer.KeyWord);
-    ttSymbol: writeln('Current Symbol: ', tokenizer.Symbol);
-    ttIdentifier: writeln('Current Identifier: ', tokenizer.Identifier);
-    ttIntConst: writeln('Current Integer Constant: ', tokenizer.IntVal);
-    ttStringConst: writeln('Current String Constant: ', tokenizer.StringVal);
-  else
-    writeln('Unknown Token Type');
-  end;
 end;
 
 procedure TCompilationEngine.compileDo();
+var
+  //subroutineName: string;
+  numArgs: Integer;
 begin
-// a ete bouffe par la fonction qui a appele do
-  writeLine('<doStatement>');
-  writeLine('<keyword> do </keyword>');
-
-  tokenizer.advance; // Consomme output
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-  tokenizer.advance; // Consomme le .
+  // Bouffé par la fonction qui a appelé do
+  tokenizer.advance; // Consomme subroutineName ou className
+  subroutineName := tokenizer.Identifier;
+  tokenizer.advance; // Consomme le '.' ou '('
   if tokenizer.symbol = '.' then
   begin
-    writeLine('<symbol> . </symbol>');
-
-    tokenizer.advance; // Consomme printstring
-    writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-    tokenizer.advance; // Consomme (
+    tokenizer.advance; // Consomme subroutineName
+    subroutineName := subroutineName + '.' + tokenizer.Identifier;
+    tokenizer.advance; // Consomme '('
   end;
-  writeLine('<symbol> ( </symbol>');
 
-  
-  tokenizer.advance;// on bouff THE AVERAGE IS
+  tokenizer.advance; // On bouffe le premier paramètre ou ')'
   compileExpressionList;
-
-  // on a Consomme le symbole ')' dans la fonction qui renvoie cad CompileExpressionList
-  writeLine('<symbol> ) </symbol>');
-
-  tokenizer.advance;  // Consomme le symbole ';'
-  writeLine('<symbol> ; </symbol>');
-  writeLine('</doStatement>');
-  tokenizer.advance;
+  numArgs := Fnumargs; // Compile les arguments et retourne le nombre d'arguments//erreur
+  tokenizer.advance; // Consomme le symbole ';'
+  // Écrit l'appel de sous-routine au VM
+  vmWriter.writeCall(subroutineName, numArgs);
+  vmWriter.writePop(sgTemp, 0);
+  tokenizer.advance; // Consomme ';'
 end;
-
 
 procedure TCompilationEngine.compileLet();
+var
+  varName: string;
+  kind: TSymbolKind;
+  index: Integer;
 begin
-  writeLine('<letStatement>');
-  // on a bouffer deja le let dans statement;
-  writeLine('<keyword> let </keyword>');
-
-  tokenizer.advance;// varName
-  writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-  tokenizer.advance;// on bouffe soit un = sois un '['
+  tokenizer.advance; // varName
+  varName := tokenizer.Identifier;
+  kind := symbolTable.kindOf(varName);
+  index := symbolTable.indexOf(varName);
+  tokenizer.advance; // on bouffe soit un = soit un '['
   if tokenizer.symbol = '[' then
   begin
-    writeLine('<symbol> [ </symbol>');
-
-    tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
+    tokenizer.advance; // on bouffe ce qui nous faut pour compileExpression
     compileExpression;
-
-    //expect(SYMBOL, ']');
-    writeLine('<symbol> ] </symbol>');
-    tokenizer.advance;// j'ajoute ce advance pour que on affiche une seule fois le = apres un ]. et dans ce cas il est affiche a la ligne 351 en dessous;
+    tokenizer.advance; // j'ajoute ce advance pour que on affiche une seule fois le = après un ]. et dans ce cas il est affiché à la ligne 351 en dessous
   end;
-  //on a bouffer le = au dessus
-  writeLine('<symbol> = </symbol>');
-  //on affiche ici et aussi dans compileExpression un = c un pblm
-  
-  tokenizer.advance;// on bouffe ce qui nous faut pour compileExpression
+
+  tokenizer.advance; // on bouffe ce qui nous faut pour compileExpression
   compileExpression;
 
-  //on a deja bouffer ; dans Compileexpression
-  writeLine('<symbol> ; </symbol>');
-  writeLine('</letStatement>');
+  // Write the assignment to VM
+  if kind <> skNone then
+    vmWriter.writePop(sgLocal, index);// ct comme ca vmWriter.writePop(TSegment(kind), index);
 
-  tokenizer.advance;// on bouffe le while, }
-
-  // ajout d un log  dans la fonction compilelet;
-  writeln('affichage du current token en sortant pour la derniere fois de la fonction CompileLet ',tokenizer.tokenType);
+  tokenizer.advance; // on bouffe le while, }
+  
+  // ajout d'un log dans la fonction compileLet
+  writeln('affichage du current token en sortant pour la dernière fois de la fonction compileLet ', tokenizer.tokenType);
 end;
 
+
 procedure TCompilationEngine.compileWhile();
+var
+  whileLabel, endWhileLabel: string;
 begin
-  writeLine('<whileStatement>');
-  writeLine('<keyword> while </keyword>');
+  whileLabel := 'WHILE_EXP' + IntToStr(symbolTable.varCount(skVar)); // Unique label for each while statement
+  endWhileLabel := 'WHILE_END' + IntToStr(symbolTable.varCount(skVar));
 
-  tokenizer.advance;//(
-
-  //on a bouffe une (
-  writeLine('<symbol> ( </symbol>');
+  tokenizer.advance; // '('
 
   tokenizer.advance;
+  vmWriter.writeLabel(whileLabel); // Write while condition label to VM
   compileExpression;
+  vmWriter.writeArithmetic(vmNot); // Negate the expression for the while condition
+  vmWriter.writeIf(endWhileLabel); // Write conditional goto to endWhileLabel
 
-  //expect(SYMBOL, ')');
-  writeLine('<symbol> ) </symbol>');
 
-  tokenizer.advance;// on bouffe {
-  //expect(SYMBOL, '{');
-  writeLine('<symbol> { </symbol>');
+  tokenizer.advance; // '{'
 
-  tokenizer.advance;//on bouffe let
+  tokenizer.advance;
   compileStatements;
 
-  //expect(SYMBOL, '}');
-  writeLine('<symbol> } </symbol>');
-  writeLine('</whileStatement>');
+  vmWriter.writeGoto(whileLabel); // Go back to the while condition
+  vmWriter.writeLabel(endWhileLabel); // Write the end label for the while loop
 
   tokenizer.advance;
 end;
 
 procedure TCompilationEngine.compileReturn();
 begin
-  writeLine('<returnStatement>');
-  writeLine('<keyword> return </keyword>');
-
-  tokenizer.advance;//on bouffe ; ou autre chose
+  tokenizer.advance; // 'return'
+  writeln('je suis rentrer dans CompileReturn!');
   if tokenizer.TokenType <> ttSymbol then
+  begin
     compileExpression;
+    vmWriter.writeReturn;
+  end
+  else
+    vmWriter.writePush(sgConstant, 0); // Push constant 0 if no return value
+    vmWriter.writeReturn;
 
-  //expect(SYMBOL, ';');
-  writeLine('<symbol> ; </symbol>');
-  writeLine('</returnStatement>');
-  tokenizer.advance;
+  //expect(ttSymbol, ';');
+  tokenizer.advance;// ';'
 end;
 
 procedure TCompilationEngine.compileIf();
+var
+  trueLabel, falseLabel, endLabel: string;
 begin
-  writeLine('<ifStatement>');
-  // on avait boufé le if dans statements
-  writeLine('<keyword> if </keyword>');
-
-  tokenizer.advance;  //on boufe la '('
-  writeLine('<symbol> ( </symbol>');
-
-  tokenizer.advance;  // on boufe pour compileExpression
+  tokenizer.advance; // Consomme 'if'
+  tokenizer.advance; // Consomme '('
   compileExpression;
-
-  //on a boufé dans compileExpression la '('
-  writeLine('<symbol> ) </symbol>');
-
-  tokenizer.advance;  //on bouffe le '{'
-  writeLine('<symbol> { </symbol>');
-
-  tokenizer.advance;  //on bouffe pr compileSatements
+  tokenizer.advance; // Consomme ')'
+  tokenizer.advance; // Consomme '{'
   compileStatements;
+  tokenizer.advance; // Consomme '}'
+  trueLabel := 'IF_TRUE' + IntToStr(symbolTable.varCount(skVar));
+  falseLabel := 'IF_FALSE' + IntToStr(symbolTable.varCount(skVar));
+  endLabel := 'IF_END' + IntToStr(symbolTable.varCount(skVar));
 
-  // on a bouffé dans compileSatements
-  writeLine('<symbol> } </symbol>');
+  vmWriter.writeIf(trueLabel);
+  vmWriter.writeGoto(falseLabel);
+  vmWriter.writeLabel(trueLabel);
 
-  tokenizer.advance;  //on bouffe pr le else
-
-  if tokenizer.KeyWord = 'else' then
+  if (tokenizer.TokenType = ttKeyword) and (tokenizer.KeyWord = 'else') then
   begin
-    writeLine('<keyword> else </keyword>');
-
-    tokenizer.advance;  //on bouffe pr le '{'
-    writeLine('<symbol> { </symbol>');
-
-    tokenizer.advance;  //on bouffe pr le compileStatements
+    tokenizer.advance; // Consomme 'else'
+    tokenizer.advance; // Consomme '{'
     compileStatements;
-
-    // on l'a bouffé ailleurs
-    writeLine('<symbol> } </symbol>');
-
-      tokenizer.advance;  // on bouffe pr la suite
+    tokenizer.advance; // Consomme '}'
   end;
 
-  writeLine('</ifStatement>');
-  // si tu es rentré dans le else alors tu as boufé pr la suite, sinon tu as boufé deja avant le else donc pas besoin de reboufé
+  vmWriter.writeLabel(falseLabel);
+  vmWriter.writeGoto(endLabel);
+  vmWriter.writeLabel(endLabel);
 end;
 
 
 procedure TCompilationEngine.compileExpression();
+var
+  op: string;
 begin
-  writeLine('<expression>');
+  writeln(tokenizer.tokenType,tokenizer.currentToken);
   compileTerm;
 
   while (tokenizer.TokenType = ttSymbol) and (tokenizer.symbol in ['+', '-', '*', '/', '&', '|', '<', '>', '=']) do
   begin
-    writeLine('<symbol> ' + tokenizer.symbol + ' </symbol>');
-
-    tokenizer.advance;//on bouffe lengh
+    op := tokenizer.symbol;
+    tokenizer.advance; // consume operator
     compileTerm;
+    case op of
+      '+': vmWriter.writeArithmetic(vmAdd);
+      '-': vmWriter.writeArithmetic(vmSub);
+      '*': vmWriter.writeCall('Math.multiply', 2);
+      '/': vmWriter.writeCall('Math.divide', 2);
+      '&': vmWriter.writeArithmetic(vmAnd);
+      '|': vmWriter.writeArithmetic(vmOr);
+      '<': vmWriter.writeArithmetic(vmLt);
+      '>': vmWriter.writeArithmetic(vmGt);
+      '=': vmWriter.writeArithmetic(vmEq);
+    end;
   end;
-
-  writeLine('</expression>');
 end;
 
 procedure TCompilationEngine.compileTerm();
+var
+  varName, op: string;//subroutineName a rajouter
+  kind: TSymbolKind;
+  index: Integer;
+  i: Integer;
 begin
-  writeLine('<term>');
-
   case tokenizer.TokenType of
     ttIntConst:
     begin
-      writeLine('<integerConstant> ' + IntToStr(tokenizer.IntVal) + ' </integerConstant>');// on a deja bouffer le 0 dans expression 
-
-      tokenizer.advance;// on bouffe ;
+      vmWriter.writePush(sgConstant, tokenizer.IntVal);
+      tokenizer.advance; // Consomme integer
     end;
     ttStringConst:
     begin
-      writeLine('<stringConstant> ' + tokenizer.StringVal + ' </stringConstant>');
-      
-      tokenizer.advance;// on bouffe symbol ')'
+      // Handling string constants
+      vmWriter.writePush(sgConstant, Length(tokenizer.StringVal));
+      vmWriter.writeCall('String.new', 1);
+      for i := 1 to Length(tokenizer.StringVal) do
+      begin
+        vmWriter.writePush(sgConstant, Ord(tokenizer.StringVal[i]));
+        vmWriter.writeCall('String.appendChar', 2);
+      end;
+      tokenizer.advance; // Consomme string
     end;
     ttKeyword:
     begin
-      writeLine('<keyword> ' + tokenizer.KeyWord + ' </keyword>');
-      tokenizer.advance;
+      // Handle 'true', 'false', 'null', 'this'
+      if tokenizer.KeyWord = 'true' then
+      begin
+        vmWriter.writePush(sgConstant, 1);// il y avait 0
+        vmWriter.writeArithmetic(vmNeg);// il y avait vmNot
+      end
+      else if (tokenizer.KeyWord = 'false') or (tokenizer.KeyWord = 'null') then
+        vmWriter.writePush(sgConstant, 0)
+      else if tokenizer.KeyWord = 'this' then
+        vmWriter.writePush(sgPointer, 0);
+      tokenizer.advance; // Consomme keyword
     end;
     ttIdentifier:
     begin
-      writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-      tokenizer.advance;// on bouffe un sybol ex '.', <,)
+      writeln('je suis dans le compile term');
+      varName := tokenizer.currentToken;
+      writeln(varName);
+      writeln('je suis dans le compile term');
+      kind := symbolTable.kindOf(varName);// sknone
+      writeln('je suis dans le compile term');
+      //symbolTable.define(varName, tokenizer.identifier, skField);
+      index := symbolTable.indexOf(varName);
+      writeln('je suis dans le compile term');
+      tokenizer.advance; // Consomme identifier
       if tokenizer.TokenType = ttSymbol then
       begin
         if tokenizer.Symbol = '[' then
         begin
-          writeLine('<symbol> [ </symbol>');
-          tokenizer.advance;
+          tokenizer.advance; // Consomme '['
           compileExpression;
-          writeLine('<symbol> ] </symbol>');
-          tokenizer.advance;
+          vmWriter.writePush(TSegment(kind), index);
+          vmWriter.writeArithmetic(vmAdd);
+          vmWriter.writePop(sgPointer, 1);
+          vmWriter.writePush(sgThat, 0);
+          tokenizer.advance; // Consomme ']'
         end
         else if tokenizer.Symbol = '(' then
         begin
-          writeLine('<symbol> ( </symbol>');
-          tokenizer.advance;
+          tokenizer.advance; // Consomme '('
           compileExpressionList;
-          writeLine('<symbol> ) </symbol>');
-          tokenizer.advance; // Consume closing ')'
+          vmWriter.writeCall(varName, 0); // Le nombre d'arguments devrait être passé correctement// je vien sde modiff
+          tokenizer.advance; // Consomme ')'
         end
         else if tokenizer.Symbol = '.' then
         begin
-          writeLine('<symbol> . </symbol>');
-
-          tokenizer.advance;// on bouffe un identifieur ex: readinit ou new
-          writeLine('<identifier> ' + tokenizer.Identifier + ' </identifier>');
-
-          tokenizer.advance;// forecement un (
-          writeLine('<symbol> ( </symbol>');
-
-          tokenizer.advance;// on bouffe expression "exrpression"
+          tokenizer.advance; // Consomme '.'
+          subroutineName := tokenizer.Identifier;
+          tokenizer.advance; // Consomme subroutineName
+          tokenizer.advance; // Consomme '('
           compileExpressionList;
-          writeLine('<symbol> ) </symbol>');// on a bouff la ) avant
-
-          tokenizer.advance; // on bouffe ;
+          vmWriter.writeCall(varName + '.' + subroutineName, Fnumargs); // Le nombre d'arguments devrait être passé correctement
+          tokenizer.advance; // Consomme ')'
+        end
+        else
+        begin
+          // Variable access
+          vmWriter.writePush(sgLocal, index);//vmWriter.writePush(TSegment(kind), index);
         end;
+      end
+      else
+      begin
+        // Variable access
+        vmWriter.writePush(TSegment(kind), index);
       end;
     end;
     ttSymbol:
     begin
       if tokenizer.Symbol = '(' then
       begin
-        writeLine('<symbol> ( </symbol>');
-        tokenizer.advance;
+        tokenizer.advance; // Consomme '('
         compileExpression;
-        writeLine('<symbol> ) </symbol>');
-        tokenizer.advance; // Consume closing ')'
+        tokenizer.advance; // Consomme ')'
       end
       else if tokenizer.Symbol in ['-', '~'] then
       begin
-        writeLine('<symbol> ' + tokenizer.Symbol + ' </symbol>');
-        tokenizer.advance;
+        op := tokenizer.Symbol;
+        tokenizer.advance; // Consomme '-' ou '~'
         compileTerm;
+        if op = '-' then
+          vmWriter.writeArithmetic(vmNeg)
+        else
+          vmWriter.writeArithmetic(vmNot);
       end;
     end;
   end;
-
-  writeLine('</term>');
 end;
-
 
 procedure TCompilationEngine.compileExpressionList();
 begin
-  writeLine('<expressionList>');// soucis ici dans les expressions xdu type ((x+2)+...)la deuxieme ( empechera de rentrer dans le if en dessous 
-  //if tokenizer.TokenType <> ttSymbol then
-  if (((tokenizer.TokenType = ttSymbol) and (tokenizer.Symbol='(')) or (tokenizer.TokenType = ttIdentifier) or (tokenizer.TokenType= ttIntConst) or (tokenizer.TokenType=ttKeyword)or (tokenizer.TokenType=ttStringConst)) then // Correct condition to check if expression list is not empty
+  Fnumargs:=0;
+  writeln(tokenizer.tokenType);
+  if (((tokenizer.TokenType = ttSymbol) and (tokenizer.Symbol = '(')) or 
+      (tokenizer.TokenType = ttIdentifier) or 
+      (tokenizer.TokenType = ttIntConst) or 
+      (tokenizer.TokenType = ttKeyword) or 
+      (tokenizer.TokenType = ttStringConst)) then
   begin
     compileExpression;
-    while tokenizer.Symbol = ',' do
+    if ((tokenizer.TokenType=ttSymbol) and (tokenizer.Symbol=')')) then
     begin
-      writeLine('<symbol> , </symbol>');
-      tokenizer.advance; // Consume the comma
-      compileExpression;
-    end;
+      Fnumargs:=1;
+    end
+    else
+    begin
+      Fnumargs:=1;
+        while tokenizer.Symbol = ',' do
+        begin
+          Inc(Fnumargs);
+          tokenizer.advance; // Consume the comma
+          compileExpression;
+        end;
+      end;
   end;
-  writeLine('</expressionList>');
+  
 end;
 
 end.

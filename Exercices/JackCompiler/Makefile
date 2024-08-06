@@ -1,12 +1,20 @@
 all: JackAnalyzer
+
 JackTokenizer:
 	fpc JackTokenizer.pas
 
-CompilationEngine: JackTokenizer
+SymbolTable:
+	fpc SymbolTable.pas
+
+VMWriter:
+	fpc VMWriter.pas
+
+CompilationEngine: JackTokenizer SymbolTable VMWriter
 	fpc CompilationEngine.pas
 
-JackAnalyzer: JackTokenizer CompilationEngine
+JackAnalyzer: JackTokenizer CompilationEngine SymbolTable VMWriter
 	fpc JackAnalyzer.pas
 	rm *.o *.ppu
+
 clean:
-	rm -f JackAnalyzer *.o *.ppu
+	rm -f JackAnalyzer *.o *.ppu
